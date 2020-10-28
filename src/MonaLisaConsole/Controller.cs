@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -22,27 +23,7 @@ namespace MonaLisaConsole
         public bool Connect()
         {
             IPAddress hostIP;
-            if (string.Compare(hostName, "*LoopBack", true) == 0)
-            {
-                hostIP = IPAddress.Loopback;
-            }
-            else if (string.Compare(hostName, "*LOCAL", true) == 0)
-            {
-                using (Socket throwAwaySocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, 0))
-                {
-                    throwAwaySocket.Connect("8.8.8.8", 65530);
-                    IPEndPoint endPoint = throwAwaySocket.LocalEndPoint as IPEndPoint;
-                    hostIP = endPoint.Address;
-                }
-            }
-            else
-            {
-                IPHostEntry HostEntry = Dns.GetHostEntry(hostName);
-                if (HostEntry.AddressList.Length == 1)
-                    hostIP = HostEntry.AddressList[0];
-                else
-                    hostIP = HostEntry.AddressList[1];
-            }
+            hostIP = ResolveIpAddress(hostName);
 
             Socket socket = new Socket(AddressFamily.InterNetwork,
                                          SocketType.Stream,
@@ -64,18 +45,51 @@ namespace MonaLisaConsole
             return true;
         }
 
+        private static IPAddress ResolveIpAddress(string forHostName)
+        {
+            IPAddress hostIP;
+            if (string.IsNullOrWhiteSpace(forHostName) || string.Compare(forHostName, "*LoopBack", true) == 0)
+            {
+                hostIP = IPAddress.Loopback;
+            }
+            else if (string.Compare(forHostName, "*LOCAL", true) == 0)
+            {
+                using (Socket throwAwaySocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, 0))
+                {
+                    throwAwaySocket.Connect("8.8.8.8", 65530);
+                    IPEndPoint endPoint = throwAwaySocket.LocalEndPoint as IPEndPoint;
+                    hostIP = endPoint.Address;
+                }
+            }
+            else
+            {
+                IPHostEntry HostEntry = Dns.GetHostEntry(forHostName);
+                if (HostEntry.AddressList.Length == 1)
+                    hostIP = HostEntry.AddressList[0];
+                else
+                    hostIP = HostEntry.AddressList[1];
+            }
+
+            return hostIP;
+        }
+
         internal void Execute()
         {
             Console.WriteLine($"Consoling {hostName} using port {port}");
 
+            string previousCommandLine = "HLP";
             while (true)
             {
-                Console.Write($"Monarch Command (BYE, GJL, RJS):> ");
+                Console.Write($"Monarch Command (., BYE, GJL, HLP, RJS, SMS):> ");
                 string commandLine = Console.ReadLine().Trim();
-                if (commandLine.Length < 3)
+                if (string.IsNullOrWhiteSpace(commandLine) || commandLine == ".")
+                    commandLine = previousCommandLine;
+                else if (commandLine.Length < 3)
                     continue;
+                else
+                    previousCommandLine = commandLine;
 
-                string command = (commandLine + "   ").Substring(0, 3).ToUpper();
+                string command = commandLine.Substring(0, 3).ToUpper();
                 if (command == "BYE")
                     break;
 
@@ -85,11 +99,41 @@ namespace MonaLisaConsole
                     case "GJL":
                         GetJobList();
                         break;
+                    case "HLP":
+                        Help();
+                        break;
                     case "RJS":
                         RequestJobShutdown(parms);
                         break;
+                    case "SMS":
+                        StopMonaServer(parms);
+                        break;
                 }
             }
+        }
+
+        private void Help()
+        {
+            Console.WriteLine();
+            Console.WriteLine("MonaLisa Console Help");
+            Console.WriteLine("Available Commands:");
+            Console.WriteLine("  BYE = Exit Mona Lisa Console");
+            Console.WriteLine("  GJL = Get Job List");
+            Console.WriteLine("  HLP = Print this Help");
+            Console.WriteLine("  RJS = Request Job Shutdown");
+            Console.WriteLine("        JobNumber [,Controlled Seconds]");
+            Console.WriteLine("  SMS = Stop Mona Server");
+            Console.WriteLine("        [Controlled Seconds]");
+            Console.WriteLine();
+        }
+
+
+        private void StopMonaServer(string parms)
+        {
+            if (!Connect())
+                return;
+            SendRequest("SMS", parms);    // Request Stop Monarch Server ([controlledSeconds])
+            EndRequest();
         }
 
         public void EndRequest()
@@ -101,7 +145,7 @@ namespace MonaLisaConsole
         {
             if (!Connect())
                 return;
-            SendRequest("RJS", parms);    // Request Job Shutdown (JobID, controlledSeconds)
+            SendRequest("RJS", parms);    // Request Job Shutdown (JobID [,controlledSeconds])
             EndRequest();
         }
 
