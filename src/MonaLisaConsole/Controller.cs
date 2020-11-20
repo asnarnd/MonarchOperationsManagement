@@ -37,7 +37,7 @@ namespace MonaLisaConsole
             catch (System.Net.Sockets.SocketException e)
             {
                 lastSocketException = e;
-                Console.WriteLine($"Could not Connect. {lastSocketException}");
+                Console.WriteLine($"Could not Connect. {lastSocketException.Message}");
             }
             socketStream = new SocketStream(socket);
             if (!socketStream.Connected)
@@ -168,9 +168,11 @@ namespace MonaLisaConsole
                 string jobUser    = socketStream.ReceiveString();
                 int jobNumber     = socketStream.ReceiveInt32();
                 string status     = socketStream.ReceiveString();
+                int masProcessId  = socketStream.ReceiveInt32();
                 string webServer  = socketStream.ReceiveString();
                 string browserClient = socketStream.ReceiveString();
-                Console.WriteLine($"{jobName} {jobUser} {jobNumber} {status} ");
+                Console.WriteLine($">{jobName} {jobUser} {jobNumber} {status} ");
+                Console.WriteLine($"    MAS Process Id: {masProcessId}");
                 Console.WriteLine($"    {webServer}");
                 Console.WriteLine($"    {browserClient}");
                 Console.WriteLine();
@@ -181,8 +183,8 @@ namespace MonaLisaConsole
 
         public void SendRequest(string operation, string parameters)
         {
-            string request = $"{operation},{parameters}";
-            socketStream.Send(request);
+            socketStream.Send(operation);
+            socketStream.Send(parameters);
         }
     }
 }
